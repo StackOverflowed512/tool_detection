@@ -4,6 +4,7 @@ numpy
 scikit-learn
 scipy
 joblib
+flask
 
 # Additional utilities
 matplotlib # For visualization and debugging

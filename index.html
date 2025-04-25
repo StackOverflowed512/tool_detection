@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool Dimension Detector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .upload-container {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #imagePreview {
+            max-width: 100%;
+            margin-top: 20px;
+        }
+        #results {
+            margin-top: 20px;
+        }
+        .tool-item {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .loading {
+            display: none;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tool Dimension Detector</h1>
+    
+    <div class="upload-container">
+        <input type="file" id="imageInput" accept="image/*">
+        <p>Or drag and drop an image here</p>
+    </div>
+
+    <div class="loading">
+        <p>Processing image... Please wait.</p>
+    </div>
+
+    <div id="imageContainer">
+        <img id="imagePreview" style="display: none;">
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const resultsDiv = document.getElementById('results');
+        const loadingDiv = document.querySelector('.loading');
+        const uploadContainer = document.querySelector('.upload-container');
+
+        // Handle drag and drop
+        uploadContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadContainer.style.borderColor = '#000';
+        });
+
+        uploadContainer.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadContainer.style.borderColor = '#ccc';
+        });
+
+        uploadContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadContainer.style.borderColor = '#ccc';
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleImageUpload(file);
+            }
+        });
+
+        // Handle file input change
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleImageUpload(file);
+            }
+        });
+
+        function handleImageUpload(file) {
+            // Show loading
+            loadingDiv.style.display = 'block';
+            resultsDiv.innerHTML = '';
+            
+            // Display image preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+
+            // Create FormData and send to backend
+            const formData = new FormData();
+            formData.append('image', file);
+
+            fetch('/analyze_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingDiv.style.display = 'none';
+                displayResults(data);
+            })
+            .catch(error => {
+                loadingDiv.style.display = 'none';
+                resultsDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            });
+        }
+
+        function displayResults(data) {
+            resultsDiv.innerHTML = '<h2>Detected Tools:</h2>';
+            
+            data.forEach(tool => {
+                const toolDiv = document.createElement('div');
+                toolDiv.className = 'tool-item';
+                
+                let dimensionsHtml = '';
+                for (const [key, value] of Object.entries(tool.dimensions)) {
+                    let unit = 'mm';
+                    if (key.includes('area')) unit = 'mm²';
+                    if (key.includes('angle')) unit = 'deg';
+                    if (key.includes('count') || key.includes('num')) unit = '';
+                    
+                    dimensionsHtml += `
+                        <p>${key.replace(/_/g, ' ')}: ${value}${unit}</p>
+                    `;
+                }
+
+                toolDiv.innerHTML = `
+                    <h3>Tool #${tool.id}: ${tool.type.replace(/_/g, ' ').toUpperCase()}</h3>
+                    ${dimensionsHtml}
+                `;
+                
+                resultsDiv.appendChild(toolDiv);
+            });
+        }
+    </script>
+</body>
+</html>
