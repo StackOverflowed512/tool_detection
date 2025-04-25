@@ -31,8 +31,7 @@ The script analyzes an image containing orthopedic tools, identifies individual 
 
 2.  **Clone the Repository (Optional):**
     ```bash
-    git clone <your-repository-url>
-    cd <repository-directory>
+    git clone [<your-repository-url>](https://github.com/StackOverflowed512/tool_detection/tree/main)
     ```
 
 3.  **Set up a Virtual Environment (Recommended):**
@@ -46,7 +45,7 @@ The script analyzes an image containing orthopedic tools, identifies individual 
 
 4.  **Install Dependencies:**
     ```bash
-    pip install opencv-python numpy scikit-learn joblib
+    pip install -r requirements.txt
     ```
 
 ## Usage
