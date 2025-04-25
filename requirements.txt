@@ -6,6 +6,7 @@ scipy
 joblib
 flask
 waitress
+gunicorn
 
 # Additional utilities
 matplotlib # For visualization and debugging
