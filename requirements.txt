@@ -5,6 +5,7 @@ scikit-learn
 scipy
 joblib
 flask
+waitress
 
 # Additional utilities
 matplotlib # For visualization and debugging
