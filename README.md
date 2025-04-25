@@ -31,7 +31,7 @@ The script analyzes an image containing orthopedic tools, identifies individual 
 
 2.  **Clone the Repository (Optional):**
     ```bash
-    git clone [<your-repository-url>](https://github.com/StackOverflowed512/tool_detection/tree/main)
+    git clone https://github.com/StackOverflowed512/tool_detection
     ```
 
 3.  **Set up a Virtual Environment (Recommended):**
