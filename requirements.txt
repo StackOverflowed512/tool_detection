@@ -1,0 +1,16 @@
+# Core requirements
+opencv-python
+numpy
+scikit-learn
+scipy
+joblib
+
+# Additional utilities
+matplotlib # For visualization and debugging
+imutils    # For image processing utilities
+tqdm      # For progress bars (if needed)
+
+# Development/testing (optional)
+pytest
+pytest-cov
+flake8
