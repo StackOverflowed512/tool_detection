@@ -381,76 +381,73 @@ class OrthopedicToolDetector:
         """Measure dimensions for ALL defined tool types."""
         if contour is None or len(contour) < 5: return None
         try:
-            rect = cv2.minAreaRect(contour); center, (w_px, h_px), angle = rect
+            # Get basic measurements
+            rect = cv2.minAreaRect(contour)
+            center, (w_px, h_px), angle = rect
             w_px, h_px = abs(w_px), abs(h_px)
+            
+            # Convert to millimeters
+            w_mm = w_px * self.pixel_to_mm
+            h_mm = h_px * self.pixel_to_mm
+            
+            # Determine length and breadth
+            length_mm = max(w_mm, h_mm)
+            breadth_mm = min(w_mm, h_mm)
+            
+            # Calculate area
             area_px = cv2.contourArea(contour)
-            w_mm, h_mm = w_px * self.pixel_to_mm, h_px * self.pixel_to_mm
             area_mm2 = area_px * self.pixel_to_mm * self.pixel_to_mm
-            max_dim_mm, min_dim_mm = max(w_mm, h_mm), min(w_mm, h_mm)
-
-            dimensions = {'area_mm2': round(area_mm2, 2)} # Common dimension
-
-            # --- Tool-Specific Measurements ---
+            
+            # Base dimensions that all tools will have
+            dimensions = {
+                'length': round(length_mm, 1),
+                'breadth': round(breadth_mm, 1),
+                'area_mm2': round(area_mm2, 2)
+            }
+            
+            # Add tool-specific measurements
             if tool_type == 'drill_guide':
-                 hole_info = self.detect_drill_guide_holes(contour, image) # Specific func might be better
-                 dimensions.update({
-                    'length': round(max_dim_mm, 1), 'width': round(min_dim_mm, 1),
+                hole_info = self.detect_drill_guide_holes(contour, image)
+                dimensions.update({
                     'hole_diameter_est': round(hole_info.get('diameter', 0) * self.pixel_to_mm, 1),
                     'hole_spacing_est': round(hole_info.get('spacing', 0) * self.pixel_to_mm, 1),
-                    'num_holes_est': float(hole_info.get('count', 0))})
+                    'num_holes_est': float(hole_info.get('count', 0))
+                })
             elif tool_type == 'depth_gauge':
-                 markings = self.detect_markings(contour, image) # Estimate
-                 dimensions.update({
-                    'length': round(max_dim_mm, 1), 'width': round(min_dim_mm, 1),
-                    'markings_est': float(markings), 'max_depth_est': round(max_dim_mm * 0.95, 1)})
-            elif tool_type == 'sizing_block':
-                 dimensions.update({
-                    'width': round(w_mm, 1), 'height': round(h_mm, 1), # Use rect dims directly
-                    'thickness_est': round(min_dim_mm * 0.3, 1),
-                    'diagonal': round(math.sqrt(w_mm**2 + h_mm**2), 1)})
+                markings = self.detect_markings(contour, image)
+                dimensions.update({
+                    'markings_est': float(markings),
+                    'max_depth_est': round(length_mm * 0.95, 1)
+                })
             elif tool_type == 'alignment_rod':
-                 curv_px = self.estimate_curvature(contour)
-                 curv_mm = curv_px * self.pixel_to_mm if curv_px < 9999 else float('inf')
-                 dimensions.update({
-                    'length': round(max_dim_mm, 1), 'diameter': round(min_dim_mm, 1),
-                    'radius_of_curvature': round(curv_mm, 1) if curv_mm != float('inf') else curv_mm })
+                curv_px = self.estimate_curvature(contour)
+                curv_mm = curv_px * self.pixel_to_mm if curv_px < 9999 else float('inf')
+                dimensions.update({
+                    'diameter': round(breadth_mm, 1),
+                    'radius_of_curvature': round(curv_mm, 1) if curv_mm != float('inf') else curv_mm
+                })
             elif tool_type == 'tunnel_dilator':
-                 hole_info = self.detect_holes_detailed(contour, image)
-                 dimensions.update({
-                    'length': round(max_dim_mm, 1), 'outer_diameter': round(max(w_mm,h_mm), 1), # Outer dim approx
+                hole_info = self.detect_holes_detailed(contour, image)
+                dimensions.update({
+                    'outer_diameter': round(max(w_mm, h_mm), 1),
                     'inner_diameter_est': round(hole_info.get('avg_diameter', 0) * self.pixel_to_mm, 1),
-                    'taper_angle_est': round(self.calculate_taper(contour), 1),
-                    'num_holes': float(hole_info.get('count', 0))})
-            elif tool_type == 'femoral_aimer':
-                 curv_px = self.estimate_curvature(contour)
-                 curv_mm = curv_px * self.pixel_to_mm if curv_px < 9999 else float('inf')
-                 dimensions.update({
-                    'max_dimension': round(max_dim_mm, 1), 'min_dimension': round(min_dim_mm, 1),
-                    'curvature_est': round(curv_mm, 1) if curv_mm != float('inf') else curv_mm })
-                 # Add more complex measures here if needed (e.g., arm lengths)
+                    'taper_angle_est': round(self.calculate_taper(contour), 1)
+                })
             elif tool_type == 'guide_wire':
-                 dimensions.update({
-                    'length': round(max_dim_mm, 1), 'diameter': round(min_dim_mm, 2)}) # Higher precision diameter
-            elif tool_type == 'cannulated_reamer':
-                 hole_info = self.detect_holes_detailed(contour, image)
-                 dimensions.update({
-                    'length': round(max_dim_mm, 1), 'outer_diameter': round(min_dim_mm, 1),
-                    'cannulation_diameter_est': round(hole_info.get('avg_diameter', 0) * self.pixel_to_mm, 1),
-                    'taper_angle_est': round(self.calculate_taper(contour), 1)})
+                dimensions.update({
+                    'diameter': round(breadth_mm, 1)
+                })
             elif tool_type == 'endobutton':
-                 hole_info = self.detect_holes_detailed(contour, image)
-                 dimensions.update({
-                    'length': round(max_dim_mm, 1), 'width': round(min_dim_mm, 1),
+                hole_info = self.detect_holes_detailed(contour, image)
+                dimensions.update({
                     'num_holes': float(hole_info.get('count', 0)),
-                    'avg_hole_diameter': round(hole_info.get('avg_diameter', 0) * self.pixel_to_mm, 2),
-                    'hole_spacing_est': round(self.estimate_hole_spacing(hole_info.get('hole_centers_px', []), contour) * self.pixel_to_mm, 1)})
-            else: # Unknown
-                 dimensions.update({
-                    'max_dimension': round(max_dim_mm, 1), 'min_dimension': round(min_dim_mm, 1)})
-
+                    'avg_hole_diameter': round(hole_info.get('avg_diameter', 0) * self.pixel_to_mm, 1),
+                    'hole_spacing_est': round(self.estimate_hole_spacing(hole_info.get('hole_centers_px', []), contour) * self.pixel_to_mm, 1)
+                })
+            
             return dimensions
         except Exception as e:
-             print(f"Error measuring tool ({tool_type}): {e}")
+             print(f"Error measuring tool: {e}")
              return None
 
     # --- Helper Measurement Functions (Keep relevant ones) ---

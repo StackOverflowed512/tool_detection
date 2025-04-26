@@ -3,10 +3,9 @@
     "id": 1,
     "type": "femoral_aimer",
     "dimensions": {
-      "area_mm2": 37.77,
-      "max_dimension": 13.8,
-      "min_dimension": 4.5,
-      "curvature_est": 0.6
+      "length": 13.8,
+      "breadth": 4.5,
+      "area_mm2": 37.77
     },
     "area_pixels": 3777.0,
     "contour": [
@@ -628,9 +627,9 @@
     "id": 2,
     "type": "unknown",
     "dimensions": {
-      "area_mm2": 34.59,
-      "max_dimension": 19.1,
-      "min_dimension": 12.0
+      "length": 19.1,
+      "breadth": 12.0,
+      "area_mm2": 34.59
     },
     "area_pixels": 3458.5,
     "contour": [
@@ -1888,9 +1887,9 @@
     "id": 3,
     "type": "unknown",
     "dimensions": {
-      "area_mm2": 11.43,
-      "max_dimension": 10.2,
-      "min_dimension": 6.9
+      "length": 10.2,
+      "breadth": 6.9,
+      "area_mm2": 11.43
     },
     "area_pixels": 1142.5,
     "contour": [
@@ -2542,9 +2541,9 @@
     "id": 4,
     "type": "depth_gauge",
     "dimensions": {
-      "area_mm2": 9.31,
       "length": 13.6,
-      "width": 2.3,
+      "breadth": 2.3,
+      "area_mm2": 9.31,
       "markings_est": 3.0,
       "max_depth_est": 12.9
     },
@@ -2826,9 +2825,9 @@
     "id": 5,
     "type": "unknown",
     "dimensions": {
-      "area_mm2": 4.64,
-      "max_dimension": 6.6,
-      "min_dimension": 3.8
+      "length": 6.6,
+      "breadth": 3.8,
+      "area_mm2": 4.64
     },
     "area_pixels": 463.5,
     "contour": [
