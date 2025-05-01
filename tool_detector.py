@@ -44,32 +44,32 @@ class OrthopedicToolDetector:
 
         # --- COMBINED & ADJUSTED Detection Thresholds (Needs Tuning!) ---
         self.thresholds = {
-            'min_area': 50,                   # Low for wires/endobuttons
-            'circularity': 0.5,               # General baseline
-            'aspect_ratio': {                 # Ranges cover all tools - refining happens in classification
-                'guide_wire': (15.0, 200.0),
-                'depth_gauge': (2.5, 20.0),   # Extended range
-                'alignment_rod': (8.0, 100.0),# High AR, less than wire
-                'cannulated_reamer': (3.0, 20.0),
-                'drill_guide': (1.5, 6.0),
-                'tunnel_dilator': (2.0, 15.0),
-                'femoral_aimer': (1.2, 10.0), # Wide range
-                'sizing_block': (0.8, 1.7),
-                'endobutton': (1.0, 4.0),
+            'min_area': 25,  # Reduced to catch smaller tools
+            'circularity': 0.35,  # More permissive
+            'aspect_ratio': {
+                'guide_wire': (8.0, 300.0),
+                'depth_gauge': (2.0, 30.0),
+                'alignment_rod': (5.0, 150.0),
+                'cannulated_reamer': (2.0, 30.0),
+                'drill_guide': (1.0, 10.0),
+                'tunnel_dilator': (1.5, 20.0),
+                'femoral_aimer': (1.0, 15.0),
+                'sizing_block': (0.5, 3.0),
+                'endobutton': (0.7, 6.0),
             },
-            'solidity': 0.70,                 # Lower general threshold allowing for complex shapes/flutes
-            'hole_ratio': 0.02,               # Min hole ratio if holes are expected
-            'elongation': {                   # Elongation (1 = max elongation) - Higher value means more elongated
-                'guide_wire': 0.95,
-                'alignment_rod': 0.90,
-                'depth_gauge': 0.85,
-                'cannulated_reamer': 0.7,
-                'tunnel_dilator': 0.6,
-                'drill_guide': 0.5,
-                'femoral_aimer': 0.4,         # Can be less elongated
+            'solidity': 0.55,  # More permissive for complex shapes
+            'hole_ratio': 0.01,  # More sensitive hole detection
+            'elongation': {
+                'guide_wire': 0.85,
+                'alignment_rod': 0.80,
+                'depth_gauge': 0.75,
+                'cannulated_reamer': 0.60,
+                'tunnel_dilator': 0.50,
+                'drill_guide': 0.40,
+                'femoral_aimer': 0.30,
                 'sizing_block': 0.1,
                 'endobutton': 0.1
-             }
+            }
         }
 
         # Visualization settings
@@ -115,38 +115,28 @@ class OrthopedicToolDetector:
         if image is None or image.size == 0: return None, None, None
         try:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))  # Increased contrast
             enhanced = clahe.apply(gray)
-            denoised = cv2.fastNlMeansDenoising(enhanced, None, h=10, templateWindowSize=7, searchWindowSize=21)
-
+            denoised = cv2.fastNlMeansDenoising(enhanced, None, h=8, templateWindowSize=7, searchWindowSize=21)
+        
+            # More sensitive adaptive thresholding
             thresh_adapt = cv2.adaptiveThreshold(
                 denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                cv2.THRESH_BINARY_INV, 15, 3
+                cv2.THRESH_BINARY_INV, 11, 2  # Adjusted parameters
             )
-            _, thresh_otsu = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-            combined_thresh = cv2.bitwise_or(thresh_adapt, thresh_otsu) # Combine methods
-
-            kernel_close = np.ones((5, 5), np.uint8)
-            kernel_open = np.ones((3, 3), np.uint8)
-            cleaned = cv2.morphologyEx(combined_thresh, cv2.MORPH_CLOSE, kernel_close, iterations=2)
-            cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel_open, iterations=1)
-
-            edges = cv2.Canny(denoised, 50, 150) # Keep edge detection
-
-            if self.debug_mode:
-                cv2.imwrite('debug_gray.jpg', gray)
-                cv2.imwrite('debug_denoised.jpg', denoised)
-                cv2.imwrite('debug_combined_thresh.jpg', combined_thresh)
-                cv2.imwrite('debug_cleaned.jpg', cleaned)
-                cv2.imwrite('debug_edges.jpg', edges)
-
-            return cleaned, edges, gray
+            
+            # Additional morphological operations
+            kernel = np.ones((3,3), np.uint8)
+            thresh_adapt = cv2.morphologyEx(thresh_adapt, cv2.MORPH_CLOSE, kernel)
+            thresh_adapt = cv2.morphologyEx(thresh_adapt, cv2.MORPH_OPEN, kernel)
+            
+            edges = cv2.Canny(denoised, 30, 150)  # More sensitive edge detection
+            return thresh_adapt, edges, gray
         except Exception as e:
-            print(f"Error during preprocessing: {e}")
+            print(f"Preprocessing error: {e}")
             return None, None, None
 
     def detect_tools(self, image: np.ndarray) -> Tuple[Optional[np.ndarray], List[Dict]]:
-        """Detect and measure tools. (Includes overlap check for complex tools)"""
         if image is None: return None, []
         h, w = image.shape[:2]
         canvas_h = h + 150
@@ -157,6 +147,20 @@ class OrthopedicToolDetector:
         if mask is None or gray is None: return result_image, []
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # More aggressive filtering of initial contours
+        min_area = 100  # Increased minimum area
+        filtered_contours = []
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area >= min_area:
+                # Add perimeter check
+                perimeter = cv2.arcLength(cnt, True)
+                if perimeter > 0 and (4 * np.pi * area) / (perimeter * perimeter) > 0.1:
+                    filtered_contours.append(cnt)
+
+        # More strict overlap removal
+        unique_contours = self.remove_duplicate_contours(filtered_contours, (h, w))
 
         # Filter initial contours by minimum size only
         potential_contours = []
@@ -225,35 +229,30 @@ class OrthopedicToolDetector:
         return result_image, results
 
     def remove_duplicate_contours(self, contours: List[np.ndarray], image_shape: Tuple[int, int]) -> List[np.ndarray]:
-        """Remove highly overlapping contours."""
-        # Function remains the same as previously provided.
         if not contours: return []
         unique_contours = []
         h, w = image_shape
-        contours.sort(key=cv2.contourArea, reverse=True) # Process larger first
-        processed_mask = np.zeros((h, w), dtype=np.uint8) # Keep track of covered area
-
-        for i, contour1 in enumerate(contours):
-             if contour1 is None or len(contour1) < 3: continue
-             area1 = cv2.contourArea(contour1)
-             if area1 <= 0: continue
-
-             # Create mask for current contour
-             mask1 = np.zeros((h, w), dtype=np.uint8)
-             cv2.drawContours(mask1, [contour1], 0, 255, -1)
-
-             # Check overlap with *already processed* contours
-             intersection = cv2.bitwise_and(mask1, processed_mask)
-             overlap_area = cv2.countNonZero(intersection)
-
-             # If the current contour significantly overlaps area already covered by larger contours, skip it
-             if overlap_area / area1 > 0.7: # Threshold for skipping
-                 continue
-
-             # If it's not a significant overlap, add it to unique list and update processed mask
-             unique_contours.append(contour1)
-             processed_mask = cv2.bitwise_or(processed_mask, mask1)
-
+        contours.sort(key=cv2.contourArea, reverse=True)
+        processed_mask = np.zeros((h, w), dtype=np.uint8)
+    
+        for contour1 in contours:
+            if contour1 is None or len(contour1) < 3: continue
+            area1 = cv2.contourArea(contour1)
+            if area1 <= 0: continue
+    
+            mask1 = np.zeros((h, w), dtype=np.uint8)
+            cv2.drawContours(mask1, [contour1], 0, 255, -1)
+    
+            intersection = cv2.bitwise_and(mask1, processed_mask)
+            overlap_area = cv2.countNonZero(intersection)
+    
+            # Increased overlap threshold from 0.7 to 0.4 to be more strict
+            if overlap_area / area1 > 0.4:
+                continue
+    
+            unique_contours.append(contour1)
+            processed_mask = cv2.bitwise_or(processed_mask, mask1)
+    
         return unique_contours
 
 
@@ -308,6 +307,7 @@ class OrthopedicToolDetector:
         if self.model is not None:
             try:
                 features_array = np.array(features).reshape(1, -1)
+                # Fix the syntax error in the comparison
                 if features_array.shape[1] == getattr(self.model, 'n_features_in_', 12):
                     prediction = self.model.predict(features_array)[0]
                     if prediction in self.classes and prediction != 'unknown': # Trust model if valid class
@@ -669,14 +669,13 @@ class OrthopedicToolDetector:
             # Original Set
             'drill_guide': {'length': 120.0, 'width': 10.0, 'hole_diameter': 7.0},
             'depth_gauge': {'length': 150.0, 'width': 6.0},
-            'sizing_block': {'width': 50.0, 'height': 50.0}, # Example
+            'sizing_block': {'width': 50.0, 'height': 50.0},
             'alignment_rod': {'diameter': 3.0, 'length': 200.0},
             'tunnel_dilator': {'outer_diameter': 10.0, 'length': 130.0},
-             # Second Set
-            'guide_wire': {'diameter': 1.6, 'length': 280.0}, # e.g., 1.6mm K-wire
-            'endobutton': {'length': 12.0, 'width': 4.0},     # e.g., 12mm
-            'cannulated_reamer': {'outer_diameter': 8.0, 'length': 100.0}, # e.g., 8mm head
-            'femoral_aimer': {'max_dimension': 150.0}         # Less reliable, use overall size
+            'guide_wire': {'diameter': 2.4, 'length': 300.0},  # Updated for standard K-wire
+            'endobutton': {'length': 12.0, 'width': 4.0},
+            'cannulated_reamer': {'outer_diameter': 8.0, 'length': 100.0},
+            'femoral_aimer': {'max_dimension': 150.0}
         }
         print("Warning: Auto-calibration relies on standard dimensions defined in code. Verify these match your tools.")
 
